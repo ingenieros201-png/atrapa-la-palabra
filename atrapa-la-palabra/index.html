@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atrapa la palabra</title>
+<style>
+  :root { --bg:#14172b; --panel:#1e2342; --accent:#ffd166; --ok:#06d6a0; --bad:#ef476f; --text:#f1f3ff; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,sans-serif;
+         display:flex; flex-direction:column; align-items:center; min-height:100vh; padding:16px; }
+  h1 { margin:0 0 8px; color:var(--accent); }
+  .hud { display:flex; gap:24px; margin-bottom:8px; font-size:1.1rem; }
+  #area { position:relative; width:min(640px,100%); height:420px; background:var(--panel);
+          border-radius:12px; overflow:hidden; border:2px solid #323a70; }
+  .w { position:absolute; padding:2px 8px; border-radius:6px; background:#2c3466; font-size:1.2rem; white-space:nowrap; }
+  .w b { color:var(--ok); }
+  #floor { position:absolute; bottom:0; left:0; right:0; height:4px; background:var(--bad); }
+  #msg { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
+         justify-content:center; background:rgba(20,23,43,.88); text-align:center; gap:12px; }
+  #msg.hide { display:none; }
+  button { background:var(--accent); border:0; padding:10px 22px; border-radius:8px; font-size:1rem; cursor:pointer; font-weight:600; }
+  input { margin-top:12px; width:min(640px,100%); padding:12px; font-size:1.2rem; border-radius:8px;
+          border:2px solid #323a70; background:var(--panel); color:var(--text); }
+</style>
+</head>
+<body>
+<h1>Atrapa la palabra</h1>
+<div class="hud">
+  <span>Puntos: <b id="score">0</b></span>
+  <span>Vidas: <b id="lives">3</b></span>
+  <span>Récord: <b id="best">0</b></span>
+</div>
+<div id="area">
+  <div id="floor"></div>
+  <div id="msg"><h2 id="title">¿Listo?</h2><p id="sub">Escribe las palabras antes de que toquen el suelo.</p><button id="go">Jugar</button></div>
+</div>
+<input id="inp" placeholder="Escribe aquí…" autocomplete="off" autocapitalize="off" spellcheck="false" disabled>
+
+<script>
+const WORDS = "casa perro gato sol luna mar río flor árbol nube tierra fuego agua viento libro mesa silla ventana camino puente montaña ciudad escuela amigo familia música juego tiempo sueño estrella camión bicicleta teléfono ordenador pantalla teclado ratón programa código sorpresa aventura tesoro dragón castillo bosque".split(" ");
+const area = document.getElementById("area"), inp = document.getElementById("inp");
+const $ = id => document.getElementById(id);
+const norm = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+let best = 0; try { best = +localStorage.getItem("alp-best") || 0; } catch(e) {}
+$("best").textContent = best;
+
+let items, score, lives, last, spawnT, running, raf;
+
+function start() {
+  items.forEach?.(i => i.el.remove());
+  items = []; score = 0; lives = 3; spawnT = 0; last = performance.now(); running = true;
+  $("score").textContent = 0; $("lives").textContent = 3;
+  $("msg").classList.add("hide"); inp.disabled = false; inp.value = ""; inp.focus();
+  raf = requestAnimationFrame(loop);
+}
+items = [];
+
+function spawn() {
+  const text = WORDS[Math.floor(Math.random() * WORDS.length)];
+  const el = document.createElement("div"); el.className = "w"; el.textContent = text;
+  area.appendChild(el);
+  const x = Math.random() * (area.clientWidth - el.offsetWidth - 10) + 5;
+  items.push({ text, el, x, y: -30, v: 35 + score * 1.5 + Math.random() * 20 });
+}
+
+function loop(now) {
+  if (!running) return;
+  const dt = Math.min((now - last) / 1000, 0.1); last = now;
+  spawnT -= dt;
+  if (spawnT <= 0) { spawn(); spawnT = Math.max(0.6, 2 - score * 0.03); }
+  for (const it of items.slice()) {
+    it.y += it.v * dt;
+    it.el.style.transform = `translate(${it.x}px,${it.y}px)`;
+    if (it.y > area.clientHeight - 30) { remove(it); lives--; $("lives").textContent = lives; if (lives <= 0) return end(); }
+  }
+  raf = requestAnimationFrame(loop);
+}
+function remove(it) { it.el.remove(); items.splice(items.indexOf(it), 1); }
+
+function end() {
+  running = false; inp.disabled = true;
+  if (score > best) { best = score; $("best").textContent = best; try { localStorage.setItem("alp-best", best); } catch(e) {} }
+  $("title").textContent = "Fin del juego";
+  $("sub").textContent = `Hiciste ${score} puntos.` + (score >= best && score > 0 ? " ¡Nuevo récord!" : "");
+  $("go").textContent = "Jugar otra vez"; $("msg").classList.remove("hide");
+}
+
+inp.addEventListener("input", () => {
+  const v = norm(inp.value.trim().toLowerCase());
+  if (!v) { items.forEach(i => i.el.textContent = i.text); return; }
+  const match = items.filter(i => norm(i.text).startsWith(v)).sort((a, b) => b.y - a.y)[0];
+  items.forEach(i => i.el.textContent = i.text);
+  if (!match) return;
+  if (norm(match.text) === v) { score++; $("score").textContent = score; remove(match); inp.value = ""; }
+  else match.el.innerHTML = `<b>${match.text.slice(0, v.length)}</b>${match.text.slice(v.length)}`;
+});
+$("go").onclick = start;
+</script>
+</body>
+</html>
